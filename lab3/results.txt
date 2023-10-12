@@ -1,0 +1,4 @@
+
+test_dir/a.txt 18
+test_dir/b.txt 6
+TOTAL 24
