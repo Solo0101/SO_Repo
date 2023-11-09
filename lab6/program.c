@@ -39,9 +39,9 @@ void generateStats(int *fin, int *fout, char givenCharacter) {
 
     }
     char foutContent[BUFF_SIZE+1];
-    sprintf(foutContent, "numar litere mici: %d\nnumar litere mari: %d\nnumar cifre: %d\nnumar aparitii caracter: %d\ndimensiune fisier: %d%c", 
-                                countSmallLetters, countCapsLetters, countDigits, countCh, fileSize, '\0');
-    write(*fout, &foutContent, BUFF_SIZE+1); 
+    sprintf(foutContent, "numar litere mici: %d\nnumar litere mari: %d\nnumar cifre: %d\nnumar aparitii caracter: %d\ndimensiune fisier: %d", 
+                                countSmallLetters, countCapsLetters, countDigits, countCh, fileSize);
+    write(*fout, &foutContent, strlen(foutContent)); 
 }
 
 int main(int argc, char **argv) {

@@ -1,5 +1,5 @@
-numar litere mici: 36
-numar litere mari: 11
+numar litere mici: 31
+numar litere mari: 3
 numar cifre: 0
-numar aparitii caracter: 4
+numar aparitii caracter: 0
 dimensiune fisier: 43
