@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#define BUFF_SIZE 256
+#define BUFF_SIZE 4096
 
 void generateStats(int *fin, int *fout, char givenCharacter) {
     char finContent[BUFF_SIZE+1];
@@ -25,7 +25,7 @@ void generateStats(int *fin, int *fout, char givenCharacter) {
 
     read(*fin, &finContent, BUFF_SIZE);  
 
-    for(unsigned int i = 0; i < BUFF_SIZE; ++i) {
+    for(unsigned int i = 0; i < strlen(finContent); ++i) {
         if(finContent[i] >= 'A' && finContent[i] <= 'Z') {
             countCapsLetters++;
         } else if (finContent[i] >= 'a' && finContent[i] <= 'z') {
