@@ -40,15 +40,15 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
     struct stat fileStats;
     struct stat target_fileStats;
 
-    while((entry = readdir(directory))) {
-        if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+    while((entry = readdir(directory)) != NULL) {
+        if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, dirpath) == 0) {
             continue;
         }
 
         strcpy(foutContent, "");
         snprintf(path_to_entry, sizeof(path_to_entry), "%s/%s", dirpath, entry->d_name);
 
-        if(fstat(*path_to_entry, &fileStats) == 0) {
+        if(lstat(path_to_entry, &fileStats) == 0) {
             fileSize = fileStats.st_size;
 
         } else {
@@ -134,6 +134,11 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                     entry->d_name, fileStats.st_uid, user_rights, group_rights, other_rights);
          }
 
+        strcpy(date, "");
+        strcpy(user_rights, "");
+        strcpy(group_rights, "");
+        strcpy(other_rights, "");
+
         if(strcmp(foutContent, "") != 0) {
             if (write(fout, foutContent, strlen(foutContent)) == -1) {
                 perror("Error writing to output file");
@@ -155,7 +160,7 @@ int main(int argc, char **argv) {
     // opening directory
 
     DIR* directory = NULL;
-    if(!(directory == opendir(argv[1])))
+    if(!(directory = opendir(argv[1])))
     {
         perror("Error! Unable to open directory %s!\n");
         exit(-1);
@@ -185,6 +190,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
-//pwd: /mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/
-//./program '/mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/input.txt' '/mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/output.txt' ';'
