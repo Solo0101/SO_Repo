@@ -1,0 +1,29 @@
+nume fisier: file.txt
+dimensiune: 0 By
+identificatorul utilizatorului: 1000
+timpul ultimei modificari: 17.11.2023
+contorul de legaturi: 1
+drepturi de acces user: RWX
+drepturi de acces grup: RWX
+drepturi de acces altii: RWX
+
+nume fisier: imagine.bmp
+inaltime: 1280
+lungime: 1920
+dimensiune: 7372938 By
+identificatorul utilizatorului: 1000
+timpul ultimei modificari: 17.11.2023
+contorul de legaturi: 1
+drepturi de acces user: RWX
+drepturi de acces grup: RWX
+drepturi de acces altii: RWX
+
+nume fisier: text.txt
+dimensiune: 75 By
+identificatorul utilizatorului: 1000
+timpul ultimei modificari: 17.11.2023
+contorul de legaturi: 1
+drepturi de acces user: RWX
+drepturi de acces grup: RWX
+drepturi de acces altii: RWX
+
