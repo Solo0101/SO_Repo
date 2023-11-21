@@ -40,15 +40,17 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
     struct stat fileStats;
     struct stat target_fileStats;
 
-    while((entry = readdir(directory))) {
-        if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+    // cycling through the directory
+    while((entry = readdir(directory)) != NULL) {
+        if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, dirpath) == 0) {
             continue;
         }
 
         strcpy(foutContent, "");
         snprintf(path_to_entry, sizeof(path_to_entry), "%s/%s", dirpath, entry->d_name);
 
-        if(fstat(*path_to_entry, &fileStats) == 0) {
+        // trying to get file stats
+        if(lstat(path_to_entry, &fileStats) == 0) {
             fileSize = fileStats.st_size;
 
         } else {
@@ -56,27 +58,26 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
             exit(-1);
         }
 
+        //check for file
          if(S_ISREG(fileStats.st_mode)) {
-            if(strstr(entry->d_name, ".bmp") != NULL) {
-                fin = open(path_to_entry, O_RDONLY);
-                if (fin == -1) {
-                    perror("Error opening input file!\n");
-                    exit(-1);
-                }
+            //oppening the file
+            if ((fin = open(path_to_entry, O_RDONLY)) == -1) {
+                perror("Error opening input file!\n");
+                exit(-1);
+            }
 
+            // check for .bmp file
+            if(strstr(entry->d_name, ".bmp") != NULL) {
                 if(lseek(fin, 18, SEEK_SET) == -1) {
                     perror("Error setting cursor!\n");
                     close(fin);
                     exit(-1);
                 }
-                // read(fin, &finContent, BUFF_SIZE);
 
                 read(fin, &w, 4);
                 read(fin, &h, 4);  
-
                 strftime(date, sizeof(date), "%d.%m.%Y", localtime(&fileStats.st_mtime));
                 rigths(fileStats, user_rights, group_rights, other_rights);
-            
                 fflush(NULL);
 
                 sprintf(foutContent, "nume fisier: %s\n"
@@ -95,6 +96,7 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                     perror("Error! Could not close file %s !\n");
                     exit(-1); 
                 }
+            // check for ordinary file
             } else {
                 strftime(date, sizeof(date), "%d.%m.%Y", localtime(&fileStats.st_mtime));
                 rigths(fileStats, user_rights, group_rights, other_rights);
@@ -109,13 +111,17 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                                      "drepturi de acces altii: %s\n\n", 
                         entry->d_name, fileSize, fileStats.st_uid, date, fileStats.st_nlink, user_rights, group_rights, other_rights);
             }
+
+        // check for symbolic link
          } else if(S_ISLNK(fileStats.st_mode)) {
-            rigths(fileStats, user_rights, group_rights, other_rights);
             if(stat(path_to_entry, &target_fileStats) == -1)
             {
                 perror("Error getting target file information for symbolic link!\n");
                 exit(-1);
             }
+            
+            rigths(fileStats, user_rights, group_rights, other_rights);
+
             sprintf(foutContent, "nume legatura: %s\n"
                                  "dimensiune legatura: %ld\n"
                                  "dimensiune fisier: %ld\n"
@@ -123,6 +129,8 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                                  "drepturi de acces grup: %s\n"
                                  "drepturi de acces altii: %s\n\n",
                     entry->d_name, fileStats.st_size, target_fileStats.st_size, user_rights, group_rights, other_rights);
+
+        // check for directory
          } else if(S_ISDIR(fileStats.st_mode)) {
             rigths(fileStats, user_rights, group_rights, other_rights);
             
@@ -133,6 +141,11 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                                                        "drepturi de acces altii: %s\n\n",
                     entry->d_name, fileStats.st_uid, user_rights, group_rights, other_rights);
          }
+
+        strcpy(date, "");
+        strcpy(user_rights, "");
+        strcpy(group_rights, "");
+        strcpy(other_rights, "");
 
         if(strcmp(foutContent, "") != 0) {
             if (write(fout, foutContent, strlen(foutContent)) == -1) {
@@ -155,9 +168,9 @@ int main(int argc, char **argv) {
     // opening directory
 
     DIR* directory = NULL;
-    if(!(directory == opendir(argv[1])))
+    if((directory = opendir(argv[1]) != 0))
     {
-        perror("Error! Unable to open directory %s!\n");
+        perror("Error! Unable to open directory!\n");
         exit(-1);
     }
 
@@ -176,7 +189,7 @@ int main(int argc, char **argv) {
 
     // closing files verification
     if(close(fout) != 0) {
-        perror("Error! Could not save and close file %s !\n");
+        perror("Error! Could not save and close file!\n");
         exit(-1); 
     }
 
@@ -185,6 +198,3 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-
-//pwd: /mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/
-//./program '/mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/input.txt' '/mnt/d/ProiecteTeme/UPT_CURSURI/Anul_3/SO/SO_Repo/lab6/output.txt' ';'
