@@ -119,7 +119,7 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
                 perror("Error getting target file information for symbolic link!\n");
                 exit(-1);
             }
-            
+
             rigths(fileStats, user_rights, group_rights, other_rights);
 
             sprintf(foutContent, "nume legatura: %s\n"
@@ -168,8 +168,7 @@ int main(int argc, char **argv) {
     // opening directory
 
     DIR* directory = NULL;
-    if((directory = opendir(argv[1]) != 0))
-    {
+    if((directory = opendir(argv[1])) == 0) {
         perror("Error! Unable to open directory!\n");
         exit(-1);
     }
@@ -177,8 +176,7 @@ int main(int argc, char **argv) {
     // creating & opening output file
 
     int fout = open("statistica.txt", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (fout == -1) 
-    {
+    if (fout == -1) {
         perror("Error opening output file!\n");
         exit(-1);
     }
