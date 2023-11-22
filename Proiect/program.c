@@ -41,17 +41,16 @@ void convertRGBtoGrayscaleBMP(int fin, pid_t *pid, int height, int width) {
             close(fin);
             exit(EXIT_FAILURE);
         }
-
         unsigned char pixel[3];
-        while(read(fin, pixel, 3) == 3) {
-            // read(fin, pixel, 3);
-            unsigned char grayscale_pixel = (unsigned char)(pixel[0] * 0.299 + pixel[1] * 0.587 + pixel[2] * 0.114);
-            lseek(fin, -3, SEEK_CUR);
-            write(fin, &grayscale_pixel, 1);
-            write(fin, &grayscale_pixel, 1);
-            write(fin, &grayscale_pixel, 1);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                read(fin, pixel, 3);
+                unsigned char grayscale_pixel = (unsigned char)(0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0] );
+                memset(pixel, grayscale_pixel, sizeof(pixel));
+                lseek(fin, -3, SEEK_CUR);
+                write(fin, &pixel, 3);
+            }
         }
-        exit(EXIT_SUCCESS);
     }
 }
 
