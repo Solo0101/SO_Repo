@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,15 +52,6 @@ void convertRGBtoGrayscaleBMP(int fin, pid_t *pid, int height, int width) {
             write(fin, &grayscale_pixel, 1);
         }
         exit(EXIT_SUCCESS);
-    } else {
-        int status;
-        waitpid(*pid, &status, 0);
-        if (WIFEXITED(status)) {
-            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
-        } else {
-            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
-        }
-        // exit(EXIT_SUCCESS);
     }
 }
 
@@ -89,11 +79,18 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
         exit(EXIT_FAILURE);
     }
     
-    convertRGBtoGrayscaleBMP(fin, &pid, h, w);
-    
-    
-
-
+    if(pid == 0) {
+        convertRGBtoGrayscaleBMP(fin, &pid, h, w);
+        exit(EXIT_SUCCESS);
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", pid, status);
+        } else {
+            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid);
+        }
+    }
     sprintf(foutContent, "nume fisier: %s\n"
                          "inaltime: %d\n"
                          "lungime: %d\n"
@@ -244,9 +241,9 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
             int status;
             waitpid(pid, &status, 0);
             if (WIFEXITED(status)) {
-                printf("S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
+                printf("S-a încheiat procesul cu pid-ul %d și codul %d\n", pid, status);
             } else {
-                printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
+                printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid);
             }
         }
     }
