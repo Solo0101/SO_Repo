@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,11 +8,13 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <ctype.h>
 #include <dirent.h>
 
 #define BUFF_SIZE 4096
-#define OUT_FILE "statistica.txt"
+#define IMAGE_MAX_SIZE 100000000
+#define OUT_FILE_SUFFIX "statistica.txt"
 typedef struct rights {
     char user_rights[4];
     char group_rights[4];
@@ -33,15 +36,53 @@ void getRigths(struct stat fileStats, char* user, char* group, char* other)
     strcat(other, (fileStats.st_mode & S_IXOTH) ? "X" : "-");
 }
 
+void convertRGBtoGrayscaleBMP(int fin, int height, int width) {
+    if(lseek(fin, 54, SEEK_SET) == -1) {
+        perror("Error setting cursor!\n");
+        close(fin);
+        exit(EXIT_FAILURE);
+    }
+
+    unsigned char pixel[3];
+    while(read(fin, pixel, 3) == 3) {
+        // read(fin, pixel, 3);
+        unsigned char grayscale_pixel = (unsigned char)(pixel[0] * 0.299 + pixel[1] * 0.587 + pixel[2] * 0.114);
+        lseek(fin, -3, SEEK_CUR);
+        write(fin, &grayscale_pixel, 1);
+        write(fin, &grayscale_pixel, 1);
+        write(fin, &grayscale_pixel, 1);
+    }
+    exit(EXIT_SUCCESS);
+}
+
 void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats, char *foutContent, rights file_rights) {
     unsigned int h = 0, w = 0;
+    pid_t pid;
     if(lseek(fin, 18, SEEK_SET) == -1) {
         perror("Error setting cursor!\n");
         close(fin);
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     read(fin, &w, 4);
-    read(fin, &h, 4);  
+    read(fin, &h, 4);
+
+    if((pid = fork() ) < 0) {
+        perror("Error! Could not instantiate child process!\n");
+        exit(1);
+    }
+    
+    if(pid == 0) {
+        convertRGBtoGrayscaleBMP(fin, h, w);
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
+        } else {
+            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
+        }
+    }
+
     fflush(NULL);
     sprintf(foutContent, "nume fisier: %s\n"
                          "inaltime: %d\n"
@@ -76,7 +117,7 @@ void processSymbolicLink(struct dirent* entry, char *path_to_entry, struct stat 
     struct stat target_fileStats;
     if(stat(path_to_entry, &target_fileStats) == -1) {
         perror("Error getting target file information for symbolic link!\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     sprintf(foutContent, "nume legatura: %s\n"
                             "dimensiune legatura: %ld\n"
@@ -96,7 +137,7 @@ void processDirectory(struct dirent* entry, struct stat fileStats, char *foutCon
             entry->d_name, fileStats.st_uid, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
 }
 
-void generateStats(DIR* directory, int fout, char *dirpath) {
+void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diroutpath) {
     //data declaration
     char foutContent[BUFF_SIZE+1];
     char path_to_entry[BUFF_SIZE+1];
@@ -105,6 +146,7 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
     rights file_rights;
     struct dirent* entry = NULL;
     struct stat fileStats;
+    pid_t pid;
 
     // cycling through the directory
     while((entry = readdir(directory)) != NULL) {
@@ -118,7 +160,7 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
         // trying to get file stats
         if(lstat(path_to_entry, &fileStats) != 0) {
             printf("Error: Can not get file stats!\n");
-            exit(-1);
+            exit(EXIT_FAILURE);
 
         }
 
@@ -126,14 +168,19 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
         strftime(date, sizeof(date), "%d.%m.%Y", localtime(&fileStats.st_mtime));
         getRigths(fileStats, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
 
-        //oppening entry file
-        if ((fin = open(path_to_entry, O_RDONLY)) == -1) {
-            perror("Error opening input file!\n");
-            exit(-1);
+        if((pid = fork() ) < 0) {
+            perror("Error! Could not instantiate child process!\n");
+            exit(EXIT_FAILURE);
         }
 
+        //oppening entry file
+        if ((fin = open(path_to_entry, O_RDWR)) == -1) {
+            perror("Error opening input file!\n");
+            exit(EXIT_FAILURE);
+        }
+        
         //check for file
-         if(S_ISREG(fileStats.st_mode)) {
+         if(S_ISREG(fileStats.st_mode) && pid == 0) {
             // check for .bmp file
             if(strstr(entry->d_name, ".bmp") != NULL) {
                 processBMP(fin, entry, date, fileStats, foutContent, file_rights);
@@ -141,21 +188,20 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
             // check for ordinary file
             } else {
                 processFile(entry, date, fileStats, foutContent, file_rights);
+
             }
-
         // check for symbolic link
-         } else if(S_ISLNK(fileStats.st_mode)) {
+         } else if(S_ISLNK(fileStats.st_mode) && pid == 0) {
             processSymbolicLink(entry, path_to_entry, fileStats, foutContent, file_rights);
-
         // check for directory
-         } else if(S_ISDIR(fileStats.st_mode)) {
+         } else if(S_ISDIR(fileStats.st_mode) && pid == 0) {
             processDirectory(entry, fileStats, foutContent, file_rights);
          }
 
         // closing entry file
         if(close(fin) != 0) {
             perror("Error! Could not close file!\n");
-            exit(-1); 
+            exit(EXIT_FAILURE); 
         }
 
         // reseting rights and last modify time for file
@@ -164,50 +210,57 @@ void generateStats(DIR* directory, int fout, char *dirpath) {
         strcpy(file_rights.group_rights, "");
         strcpy(file_rights.other_rights, "");
 
-        // writing to statistica.txt
-        if(strcmp(foutContent, "") != 0) {
+        // writing to <director_iesire>/<nume_intrare>_statistica.txt
+        if(strcmp(foutContent, "") != 0 && pid == 0) {
+            // creating & opening output file
+            char out_file_path[BUFF_SIZE];
+            sprintf(out_file_path, "%s/%s_%s", diroutpath, entry->d_name, OUT_FILE_SUFFIX);
+            int fout = open(out_file_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            if (fout == -1) {
+                perror("Error opening output file!\n");
+                exit(EXIT_FAILURE);
+            }
             if (write(fout, foutContent, strlen(foutContent)) == -1) {
                 perror("Error writing to output file!");
-                close(fout);
-                exit(-1);
+                // closing files verification
+                if(close(fout) != 0) {
+                    perror("Error! Could not save and close file!\n");
+                    exit(EXIT_FAILURE); 
+                }
+                exit(EXIT_FAILURE);
             }
+            int status;
+            waitpid(pid, &status, 0);
+            if (WIFEXITED(status)) {
+                printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
+            } else {
+                printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
+            }
+            exit(EXIT_SUCCESS);
         }
     }
 }
 
 int main(int argc, char **argv) {
     // input verification
-
-    if(argc != 2) {
-        printf("Error! Program should look like: Usage ./program <director_intrare>!\n");
-        exit(-1);
+    if(argc != 3) {
+        printf("Error! Program should look like: Usage ./program <director_intrare> <director_iesire>!\n");
+        exit(EXIT_FAILURE);
     }
-
-    // opening directory
 
     DIR* directory = NULL;
-    if((directory = opendir(argv[1])) == 0) {
+    DIR* directory_out = NULL;
+    
+    // opening directory
+    if((directory = opendir(argv[1])) == 0 || (directory_out = opendir(argv[2])) == 0) {
         perror("Error! Unable to open directory!\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    // creating & opening output file
-
-    int fout = open(OUT_FILE, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (fout == -1) {
-        perror("Error opening output file!\n");
-        exit(-1);
-    }
 
     // solving:
+    generateStats(directory, directory_out, argv[1], argv[2]);
 
-    generateStats(directory, fout, argv[1]);
-
-    // closing files verification
-    if(close(fout) != 0) {
-        perror("Error! Could not save and close file!\n");
-        exit(-1); 
-    }
 
     // closing directory
     closedir(directory);
