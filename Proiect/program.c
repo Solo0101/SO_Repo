@@ -13,7 +13,6 @@
 #include <dirent.h>
 
 #define BUFF_SIZE 4096
-#define IMAGE_MAX_SIZE 100000000
 #define OUT_FILE_SUFFIX "statistica.txt"
 typedef struct rights {
     char user_rights[4];
@@ -36,23 +35,34 @@ void getRigths(struct stat fileStats, char* user, char* group, char* other)
     strcat(other, (fileStats.st_mode & S_IXOTH) ? "X" : "-");
 }
 
-void convertRGBtoGrayscaleBMP(int fin, int height, int width) {
-    if(lseek(fin, 54, SEEK_SET) == -1) {
-        perror("Error setting cursor!\n");
-        close(fin);
-        exit(EXIT_FAILURE);
-    }
+void convertRGBtoGrayscaleBMP(int fin, pid_t *pid, int height, int width) {
+    if(pid == 0) {
+        if(lseek(fin, 54, SEEK_SET) == -1) {
+            perror("Error setting cursor!\n");
+            close(fin);
+            exit(EXIT_FAILURE);
+        }
 
-    unsigned char pixel[3];
-    while(read(fin, pixel, 3) == 3) {
-        // read(fin, pixel, 3);
-        unsigned char grayscale_pixel = (unsigned char)(pixel[0] * 0.299 + pixel[1] * 0.587 + pixel[2] * 0.114);
-        lseek(fin, -3, SEEK_CUR);
-        write(fin, &grayscale_pixel, 1);
-        write(fin, &grayscale_pixel, 1);
-        write(fin, &grayscale_pixel, 1);
+        unsigned char pixel[3];
+        while(read(fin, pixel, 3) == 3) {
+            // read(fin, pixel, 3);
+            unsigned char grayscale_pixel = (unsigned char)(pixel[0] * 0.299 + pixel[1] * 0.587 + pixel[2] * 0.114);
+            lseek(fin, -3, SEEK_CUR);
+            write(fin, &grayscale_pixel, 1);
+            write(fin, &grayscale_pixel, 1);
+            write(fin, &grayscale_pixel, 1);
+        }
+        exit(EXIT_SUCCESS);
+    } else {
+        int status;
+        waitpid(*pid, &status, 0);
+        if (WIFEXITED(status)) {
+            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
+        } else {
+            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
+        }
+        // exit(EXIT_SUCCESS);
     }
-    exit(EXIT_SUCCESS);
 }
 
 void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats, char *foutContent, rights file_rights) {
@@ -65,25 +75,25 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
     }
     read(fin, &w, 4);
     read(fin, &h, 4);
+    
+    fflush(NULL);
+
+    if(lseek(fin, 0, SEEK_SET) == -1) {
+        perror("Error resetting cursor to the begining of the file\n");
+        close(fin);
+        exit(EXIT_FAILURE);
+    }
 
     if((pid = fork() ) < 0) {
         perror("Error! Could not instantiate child process!\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
-    if(pid == 0) {
-        convertRGBtoGrayscaleBMP(fin, h, w);
-    } else {
-        int status;
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status)) {
-            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
-        } else {
-            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
-        }
-    }
+    convertRGBtoGrayscaleBMP(fin, &pid, h, w);
+    
+    
 
-    fflush(NULL);
+
     sprintf(foutContent, "nume fisier: %s\n"
                          "inaltime: %d\n"
                          "lungime: %d\n"
@@ -178,7 +188,7 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
             perror("Error opening input file!\n");
             exit(EXIT_FAILURE);
         }
-        
+
         //check for file
          if(S_ISREG(fileStats.st_mode) && pid == 0) {
             // check for .bmp file
@@ -229,14 +239,15 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
                 }
                 exit(EXIT_FAILURE);
             }
+            exit(EXIT_SUCCESS);
+        } else {
             int status;
             waitpid(pid, &status, 0);
             if (WIFEXITED(status)) {
-                printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
+                printf("S-a încheiat procesul cu pid-ul %d și codul %d\n", gettid(), status);
             } else {
                 printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", gettid());
             }
-            exit(EXIT_SUCCESS);
         }
     }
 }
