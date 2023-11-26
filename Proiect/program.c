@@ -34,24 +34,24 @@ void getRigths(struct stat fileStats, char* user, char* group, char* other)
     strcat(other, (fileStats.st_mode & S_IXOTH) ? "X" : "-");
 }
 
-void convertRGBtoGrayscaleBMP(int fin, pid_t *pid, int height, int width) {
-    if(pid == 0) {
-        if(lseek(fin, 54, SEEK_SET) == -1) {
-            perror("Error setting cursor!\n");
-            close(fin);
-            exit(EXIT_FAILURE);
-        }
-        unsigned char pixel[3];
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                read(fin, pixel, 3);
-                unsigned char grayscale_pixel = (unsigned char)(0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0] );
-                memset(pixel, grayscale_pixel, sizeof(pixel));
-                lseek(fin, -3, SEEK_CUR);
-                write(fin, &pixel, 3);
-            }
-        }
+void convertRGBtoGrayscaleBMP(int fin, int height, int width) {
+    if(lseek(fin, 54, SEEK_SET) == -1) {
+        perror("Error setting cursor!\n");
+        close(fin);
+        exit(EXIT_FAILURE);
     }
+    unsigned char pixel[3];
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            read(fin, pixel, 3);
+            unsigned char grayscale_pixel = (unsigned char)(0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0]);
+            lseek(fin, -3, SEEK_CUR);
+            write(fin, &grayscale_pixel, 1);
+            write(fin, &grayscale_pixel, 1);
+            write(fin, &grayscale_pixel, 1);
+            lseek(fin, 1, SEEK_CUR);
+        }
+    }    
 }
 
 void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats, char *foutContent, rights file_rights) {
@@ -62,16 +62,11 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
         close(fin);
         exit(EXIT_FAILURE);
     }
-    read(fin, &w, 4);
-    read(fin, &h, 4);
+    read(fin, &w, sizeof(int));
+    read(fin, &h, sizeof(int));
     
     fflush(NULL);
 
-    if(lseek(fin, 0, SEEK_SET) == -1) {
-        perror("Error resetting cursor to the begining of the file\n");
-        close(fin);
-        exit(EXIT_FAILURE);
-    }
 
     if((pid = fork() ) < 0) {
         perror("Error! Could not instantiate child process!\n");
@@ -79,7 +74,7 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
     }
     
     if(pid == 0) {
-        convertRGBtoGrayscaleBMP(fin, &pid, h, w);
+        convertRGBtoGrayscaleBMP(fin, h, w);
         exit(EXIT_SUCCESS);
     } else {
         int status;
