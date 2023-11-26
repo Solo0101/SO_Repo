@@ -34,29 +34,25 @@ void getRigths(struct stat fileStats, char* user, char* group, char* other)
     strcat(other, (fileStats.st_mode & S_IXOTH) ? "X" : "-");
 }
 
-void convertRGBtoGrayscaleBMP(int fin, int height, int width) {
+void convertRGBtoGrayscaleBMP(int fin) {
     if(lseek(fin, 54, SEEK_SET) == -1) {
         perror("Error setting cursor!\n");
         close(fin);
         exit(EXIT_FAILURE);
     }
     unsigned char pixel[3];
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            read(fin, pixel, 3);
-            unsigned char grayscale_pixel = (unsigned char)(0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0]);
-            lseek(fin, -3, SEEK_CUR);
-            write(fin, &grayscale_pixel, 1);
-            write(fin, &grayscale_pixel, 1);
-            write(fin, &grayscale_pixel, 1);
-            lseek(fin, 1, SEEK_CUR);
-        }
+    while(read(fin, pixel, 3) == 3) {
+        unsigned char grayscale_pixel = (unsigned char)(0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0]);
+        lseek(fin, -3, SEEK_CUR);
+        write(fin, &grayscale_pixel, 1);
+        write(fin, &grayscale_pixel, 1);
+        write(fin, &grayscale_pixel, 1);
+        lseek(fin, 1, SEEK_CUR);
     }    
 }
 
 void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats, char *foutContent, rights file_rights) {
     unsigned int h = 0, w = 0;
-    pid_t pid;
     if(lseek(fin, 18, SEEK_SET) == -1) {
         perror("Error setting cursor!\n");
         close(fin);
@@ -67,24 +63,6 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
     
     fflush(NULL);
 
-
-    if((pid = fork() ) < 0) {
-        perror("Error! Could not instantiate child process!\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    if(pid == 0) {
-        convertRGBtoGrayscaleBMP(fin, h, w);
-        exit(EXIT_SUCCESS);
-    } else {
-        int status;
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status)) {
-            printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", pid, status);
-        } else {
-            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid);
-        }
-    }
     sprintf(foutContent, "nume fisier: %s\n"
                          "inaltime: %d\n"
                          "lungime: %d\n"
@@ -121,20 +99,20 @@ void processSymbolicLink(struct dirent* entry, char *path_to_entry, struct stat 
         exit(EXIT_FAILURE);
     }
     sprintf(foutContent, "nume legatura: %s\n"
-                            "dimensiune legatura: %ld\n"
-                            "dimensiune fisier: %ld\n"
-                            "drepturi de acces user: %s\n"
-                            "drepturi de acces grup: %s\n"
-                            "drepturi de acces altii: %s\n\n",
+                         "dimensiune legatura: %ld\n"
+                         "dimensiune fisier: %ld\n"
+                         "drepturi de acces user: %s\n"
+                         "drepturi de acces grup: %s\n"
+                         "drepturi de acces altii: %s\n\n",
             entry->d_name, fileStats.st_size, target_fileStats.st_size, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
 }
 
 void processDirectory(struct dirent* entry, struct stat fileStats, char *foutContent, rights file_rights) {
-    snprintf(foutContent, strlen(foutContent), "nume director: %s\n"
-                                                "identificatorul utilizatorului: %d\n"
-                                                "drepturi de acces user: %s\n"
-                                                "drepturi de acces grup: %s\n"
-                                                "drepturi de acces altii: %s\n\n",
+    sprintf(foutContent, "nume director: %s\n"
+                          "identificatorul utilizatorului: %d\n"
+                          "drepturi de acces user: %s\n"
+                          "drepturi de acces grup: %s\n"
+                          "drepturi de acces altii: %s\n\n",
             entry->d_name, fileStats.st_uid, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
 }
 
@@ -174,16 +152,35 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
             exit(EXIT_FAILURE);
         }
 
-        //oppening entry file
-        if ((fin = open(path_to_entry, O_RDWR)) == -1) {
-            perror("Error opening input file!\n");
-            exit(EXIT_FAILURE);
-        }
-
         //check for file
          if(S_ISREG(fileStats.st_mode) && pid == 0) {
+            //oppening entry file
+            if ((fin = open(path_to_entry, O_RDWR)) == -1) {
+                perror("Error opening input file!\n");
+                exit(EXIT_FAILURE);
+            }
             // check for .bmp file
             if(strstr(entry->d_name, ".bmp") != NULL) {
+            // creating a new process for RGB to Greyscale conversion
+                pid_t pid2;    
+                if((pid2 = fork() ) < 0) {
+                    perror("Error! Could not instantiate child process!\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                if(pid2 == 0) {
+                    convertRGBtoGrayscaleBMP(fin);
+                    exit(EXIT_SUCCESS);
+                } else {
+                    int status;
+                    waitpid(pid2, &status, 0);
+                    if (WIFEXITED(status)) {
+                        printf("RGBtoGrey: S-a încheiat procesul cu pid-ul %d și codul %d\n", pid2, status);
+                    } else {
+                        printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid2);
+                    }
+                }
+
                 processBMP(fin, entry, date, fileStats, foutContent, file_rights);
 
             // check for ordinary file
@@ -191,19 +188,19 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
                 processFile(entry, date, fileStats, foutContent, file_rights);
 
             }
+            // closing entry file
+            if(close(fin) != 0) {
+                perror("Error! Could not close file!\n");
+                exit(EXIT_FAILURE); 
+            }
         // check for symbolic link
-         } else if(S_ISLNK(fileStats.st_mode) && pid == 0) {
+        } else if(S_ISLNK(fileStats.st_mode) && pid == 0) {
             processSymbolicLink(entry, path_to_entry, fileStats, foutContent, file_rights);
         // check for directory
-         } else if(S_ISDIR(fileStats.st_mode) && pid == 0) {
+        } else if(S_ISDIR(fileStats.st_mode) && pid == 0) {
             processDirectory(entry, fileStats, foutContent, file_rights);
-         }
+        } 
 
-        // closing entry file
-        if(close(fin) != 0) {
-            perror("Error! Could not close file!\n");
-            exit(EXIT_FAILURE); 
-        }
 
         // reseting rights and last modify time for file
         strcpy(date, "");
@@ -235,7 +232,7 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
             int status;
             waitpid(pid, &status, 0);
             if (WIFEXITED(status)) {
-                printf("S-a încheiat procesul cu pid-ul %d și codul %d\n", pid, status);
+                printf("S-a încheiat procesul cu pid-ul %d și codul %d pentru fisierul %s\n", pid, status, entry->d_name);
             } else {
                 printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid);
             }
