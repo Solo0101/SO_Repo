@@ -80,13 +80,13 @@ void processBMP(int fin, struct dirent* entry, char *date, struct stat fileStats
 
 void processFile(struct dirent* entry, char *date, struct stat fileStats, char *foutContent, rights file_rights) {
     sprintf(foutContent, "nume fisier: %s\n"
-                            "dimensiune: %ld By\n"
-                            "identificatorul utilizatorului: %d\n"
-                            "timpul ultimei modificari: %s\n"
-                            "contorul de legaturi: %ld\n"
-                            "drepturi de acces user: %s\n"
-                            "drepturi de acces grup: %s\n"
-                            "drepturi de acces altii: %s\n\n", 
+                         "dimensiune: %ld By\n"
+                         "identificatorul utilizatorului: %d\n"
+                         "timpul ultimei modificari: %s\n"
+                         "contorul de legaturi: %ld\n"
+                         "drepturi de acces user: %s\n"
+                         "drepturi de acces grup: %s\n"
+                         "drepturi de acces altii: %s\n\n", 
             entry->d_name, fileStats.st_size, fileStats.st_uid, date, 
             fileStats.st_nlink, 
             file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
@@ -116,7 +116,7 @@ void processDirectory(struct dirent* entry, struct stat fileStats, char *foutCon
             entry->d_name, fileStats.st_uid, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
 }
 
-void closeFileEndProcess(char *foutContent, char *diroutpath, pid_t pid, pid_t pid2, struct dirent *entry) {
+void closeFileEndProcess(char *foutContent, char *diroutpath, pid_t pid, struct dirent *entry, int lines_written) {
     if(pid == 0) {
         if(strcmp(foutContent, "") != 0) {
             // creating & opening output file
@@ -137,26 +137,42 @@ void closeFileEndProcess(char *foutContent, char *diroutpath, pid_t pid, pid_t p
                 exit(EXIT_FAILURE);
             }
         }
-        exit(EXIT_SUCCESS);
-    } else if(pid2 == 0) {
-        exit(EXIT_SUCCESS);
-    } else {
+        // exit(EXIT_SUCCESS);
+        exit(lines_written);
+    } else{
         int status;
-        wait(&status);
+        waitpid(pid, &status, 0);
         if(WIFEXITED(status)) {
-            printf("S-a încheiat procesul cu pid-ul %d și codul %d (pentru fisierul %s)\n", pid, status, entry->d_name);
+            printf("S-a încheiat procesul cu pid-ul %d și codul %d (pentru fisierul %s)\n", pid, WEXITSTATUS(status), entry->d_name);
         } else {
-            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid);
+            printf("Procesul cu pid-ul %d nu s-a încheiat normal, cu codul %d! (pentru fisierul %s)\n", pid, WEXITSTATUS(status), entry->d_name);
+        }
+    }
+
+}
+
+void stopProcess2(pid_t pid2, struct dirent *entry, int *total_regex_lines) {
+    if(pid2 != 0) {
+        int status2;
+        waitpid(pid2, &status2, 0);
+        if(WIFEXITED(status2)) {
+            *total_regex_lines += WEXITSTATUS(status2);
+            printf("S-a încheiat procesul cu pid2-ul %d și codul %d (pentru fisierul %s)\n", pid2, WEXITSTATUS(status2), entry->d_name);
+        } else {
+            printf("Procesul cu pid-ul %d nu s-a încheiat normal!\n", pid2);
         }
     }
 }
 
-void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diroutpath) {
+void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diroutpath, char character) {
     //data declaration
     char foutContent[BUFF_SIZE+1];
     char path_to_entry[BUFF_SIZE+1];
     char date[20];
     int fin = 0;
+    int pfd[2];
+    int lines_written = 0;
+    int total_regex_lines = 0;
     rights file_rights;
     struct dirent* entry = NULL;
     struct stat fileStats;
@@ -177,10 +193,17 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
             exit(EXIT_FAILURE);
         }
 
+        // creating pipe
+        if(pipe(pfd)) {
+            printf("Error: Can not instantiate pipe!\n");
+            exit(EXIT_FAILURE);
+        }
+
         //get rights and last modify time for file
         strftime(date, sizeof(date), "%d.%m.%Y", localtime(&fileStats.st_mtime));
         getRigths(fileStats, file_rights.user_rights, file_rights.group_rights, file_rights.other_rights);
-        
+        lines_written = 0;
+
         if((pid = fork() ) < 0) {
             perror("Error! Could not instantiate child process!\n");
             exit(EXIT_FAILURE);
@@ -200,9 +223,16 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
                 // check for .bmp file
                 if(strstr(entry->d_name, ".bmp") != NULL) {
                     processBMP(fin, entry, date, fileStats, foutContent, file_rights);
+                    lines_written = 10;
                 // check for ordinary file
                 } else {
                     processFile(entry, date, fileStats, foutContent, file_rights);
+                    lines_written = 9;
+
+                    close(pfd[0]);
+                    dup2(pfd[1], 1);
+                    execlp("cat", "cat", path_to_entry, NULL);
+                    close(pfd[1]);
                 }
             } else if(pid2 == 0){
                 // check for .bmp file
@@ -211,8 +241,14 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
                 // check for ordinary file
                 } else {
                     //proces citire propozitii
-                    //...
+                    close(pfd[1]); // closing writing end of pipe
+                    dup2(pfd[0], 0);
+
+                    execlp("bash", "bash", "script.sh", character, NULL);
                 }
+                exit(EXIT_SUCCESS);
+            } else {
+                stopProcess2(pid2, entry, &total_regex_lines);
             }
             // closing entry file
             if(close(fin) != 0) {
@@ -223,11 +259,13 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
         } else if(S_ISLNK(fileStats.st_mode)) {
             if(pid == 0){
                 processSymbolicLink(entry, path_to_entry, fileStats, foutContent, file_rights);
+                lines_written = 6;
             }
         // check for directory
         } else if(S_ISDIR(fileStats.st_mode) && pid == 0) {
             if(pid == 0) {
                 processDirectory(entry, fileStats, foutContent, file_rights);
+                lines_written = 5;
             }
         } 
 
@@ -238,9 +276,14 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
         strcpy(file_rights.other_rights, "");
 
         // writing to <director_iesire>/<nume_intrare>_statistica.txt
+
+        close(pfd[0]);
+        close(pfd[1]);
         
-        closeFileEndProcess(foutContent, diroutpath, pid, pid2, entry); 
+        closeFileEndProcess(foutContent, diroutpath, pid, entry, lines_written); 
     }
+
+    printf("Au fost identificate in total %d propozitii corecte care contin caracterul '%c'\n", total_regex_lines, character);
 }
 
 int main(int argc, char **argv) {
@@ -260,7 +303,7 @@ int main(int argc, char **argv) {
     }
 
     // solving:
-    generateStats(directory, directory_out, argv[1], argv[2]);
+    generateStats(directory, directory_out, argv[1], argv[2], argv[3][0]);
 
     // closing directory
     closedir(directory);
