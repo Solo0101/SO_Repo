@@ -171,6 +171,7 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
     char date[20];
     int fin = 0;
     int pfd[2];
+    int pfd2[2];
     int lines_written = 0;
     int total_regex_lines = 0;
     rights file_rights;
@@ -195,6 +196,11 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
 
         // creating pipe
         if(pipe(pfd)) {
+            printf("Error: Can not instantiate pipe!\n");
+            exit(EXIT_FAILURE);
+        }
+
+        if(pipe(pfd2)) {
             printf("Error: Can not instantiate pipe!\n");
             exit(EXIT_FAILURE);
         }
@@ -240,11 +246,13 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
                     convertRGBtoGrayscaleBMP(fin);
                 // check for ordinary file
                 } else {
-                    //proces citire propozitii
+                    //read file content process
                     close(pfd[1]); // closing writing end of pipe
                     dup2(pfd[0], 0);
-
+                    dup2(pfd2[1], 1);
+                    total_regex_lines = pfd2[0].read();
                     execlp("bash", "bash", "script.sh", character, NULL);
+                    
                 }
                 exit(EXIT_SUCCESS);
             } else {
@@ -276,11 +284,11 @@ void generateStats(DIR* directory, DIR* directory_out, char *dirpath, char *diro
         strcpy(file_rights.other_rights, "");
 
         // writing to <director_iesire>/<nume_intrare>_statistica.txt
+        closeFileEndProcess(foutContent, diroutpath, pid, entry, lines_written); 
 
         close(pfd[0]);
         close(pfd[1]);
         
-        closeFileEndProcess(foutContent, diroutpath, pid, entry, lines_written); 
     }
 
     printf("Au fost identificate in total %d propozitii corecte care contin caracterul '%c'\n", total_regex_lines, character);
