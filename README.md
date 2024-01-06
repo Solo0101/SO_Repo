@@ -1,5 +1,12 @@
 ![изображение](https://github.com/Solo0101/SO_Repo/assets/94441775/cdc95dec-e043-43d5-ab69-2b7e9fbc11a0)
 
+# HOW TO USE
+# 1. check releases
+# 2. run exe file
+# 3. open the game
+# 4. click ins 
+# 5. Go play
+
 # AIMBOT (AIM ASSIST)
 
  # Enabled / Enable the aimbot
