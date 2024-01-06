@@ -1,6 +1,7 @@
 ![изображение](https://github.com/Solo0101/SO_Repo/assets/94441775/cdc95dec-e043-43d5-ab69-2b7e9fbc11a0)
 
-# 1![изображение](https://github.com/Solo0101/SO_Repo/assets/94441775/fdc347d5-3eed-470f-a0ee-252ae9e86d29)
+# 1![изображение](https://github.com/Solo0101/SO_Repo/assets/94441775/fdc347d5-3eed-470f-a0ee-252ae9e86d29) 2.![изображение](https://github.com/Solo0101/SO_Repo/assets/94441775/70758ff0-62cd-42db-a8ce-1b81edce88b1)
+
 
 
 # HOW TO USE
